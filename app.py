@@ -364,7 +364,8 @@ def telegram_webhook():
             reply, include_owner_buttons = start_lookup_if_possible(chat_id)
         else:
             reply = ask_openai(chat_id, text, build_context_for_general_message(text))
-    except Exception:
+    except Exception as exc:
+        print(f"Telegram AI reply failed: {type(exc).__name__}: {exc}", flush=True)
         if normalized in {"help", "/help", "/start", "start"}:
             reply = command_guide()
         elif "result" in normalized or "live" in normalized or "jac" in normalized:
