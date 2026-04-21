@@ -22,6 +22,26 @@ app = Flask(__name__)
 CHAT_STATES = {}
 
 
+def command_guide() -> str:
+    return (
+        f"Hello! I am {OWNER_NAME}'s JAC Class 12 result bot.\n\n"
+        "Useful commands:\n"
+        "/start - Show welcome message and commands\n"
+        "help - Show how to use this bot\n"
+        "result live or not - Check whether the official JAC Class 12 result is live\n"
+        "check my result - Start result checking flow when the official result is live\n"
+        "who created this bot - Show creator details\n\n"
+        "How to use result check:\n"
+        "1. Send: check my result\n"
+        "2. Send your roll code\n"
+        "3. Send your roll number\n"
+        "4. Send your stream: science, commerce, or arts\n"
+        "5. Choose format: html or pdf\n\n"
+        "If direct result fetch is not available, I will try to help with text updates.\n\n"
+        f"{AI_DISCLAIMER}"
+    )
+
+
 def get_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
     if not value:
@@ -121,6 +141,9 @@ def send_telegram_message_with_buttons(chat_id: int, text: str, include_owner_bu
 
 def build_reply(message_text: str) -> str:
     text = message_text.lower()
+    if text in {"/start", "start"}:
+        return command_guide()
+
     if any(word in text for word in ("hi", "hello", "hey", "hii", "namaste")):
         return (
             f"Hello! I am the JAC result bot by {OWNER_NAME}. "
@@ -141,11 +164,8 @@ def build_reply(message_text: str) -> str:
             "Message me anytime to check the JAC Class 12 result."
         )
 
-    if any(phrase in text for phrase in ("who are you", "what can you do", "help")):
-        return (
-            f"I am {OWNER_NAME}'s JAC result bot. I can tell you whether the official Class 12 result "
-            "is live. Try: result live or not"
-        )
+    if any(phrase in text for phrase in ("who are you", "what can you do", "help", "/help")):
+        return command_guide()
 
     if "result" in text or "live" in text or "jac" in text:
         return (
