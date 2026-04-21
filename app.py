@@ -11,8 +11,10 @@ JAC_URL = "https://jacresults.com/"
 OWNER_NAME = "Priyanshu Raj"
 INSTAGRAM_URL = "https://instagram.com/priyanshuxraj"
 STATE_FILE = Path("alert_state.json")
+RESULT_FETCH_MODES = ("html", "pdf")
 
 app = Flask(__name__)
+CHAT_STATES = {}
 
 
 def get_env(name: str) -> str:
@@ -37,6 +39,29 @@ def class_12_live() -> bool:
         "intermediate examination - 2026",
     )
     return any(marker in html for marker in markers)
+
+
+def result_entry_live() -> bool:
+    response = requests.get(
+        JAC_URL,
+        headers={"User-Agent": "JACCloudTelegramBot/1.0"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    html = response.text.lower()
+    return (
+        "enter-class-xii-2026" in html
+        or "enter-class-xii-arts-2026" in html
+        or "results of annual intermediate examination - 2026" in html
+    )
+
+
+def detect_result_delivery_modes() -> list[str]:
+    if not result_entry_live():
+        return []
+    # Placeholder capability map until the official 2026 result form is live
+    # and its response flow can be verified end-to-end.
+    return list(RESULT_FETCH_MODES)
 
 
 def load_state() -> dict:
@@ -124,6 +149,78 @@ def build_reply(message_text: str) -> str:
     )
 
 
+def start_result_lookup(chat_id: int) -> str:
+    CHAT_STATES[chat_id] = {"step": "await_roll_code"}
+    return (
+        "Okay. Send your roll code first.\n"
+        "Format example: 11001"
+    )
+
+
+def handle_lookup_flow(chat_id: int, message_text: str):
+    state = CHAT_STATES.get(chat_id)
+    if not state:
+        return None
+
+    text = message_text.strip()
+    step = state.get("step")
+
+    if step == "await_roll_code":
+        state["roll_code"] = text
+        state["step"] = "await_roll_number"
+        return "Now send your roll number."
+
+    if step == "await_roll_number":
+        state["roll_number"] = text
+        state["step"] = "await_stream"
+        return "Now send your stream: science, commerce, or arts."
+
+    if step == "await_stream":
+        stream = text.lower()
+        if stream not in {"science", "commerce", "arts"}:
+            return "Please send one valid stream: science, commerce, or arts."
+
+        state["stream"] = stream
+        state["step"] = "await_format"
+        return "Now choose result format: html or pdf."
+
+    if step == "await_format":
+        format_choice = text.lower()
+        if format_choice not in {"html", "pdf"}:
+            return "Please choose one valid format: html or pdf."
+
+        state["format"] = format_choice
+        CHAT_STATES.pop(chat_id, None)
+
+        if not result_entry_live():
+            return (
+                "I got your details:\n"
+                f"Roll code: {state['roll_code']}\n"
+                f"Roll number: {state['roll_number']}\n"
+                f"Stream: {state['stream'].title()}\n\n"
+                f"Preferred format: {format_choice.upper()}\n\n"
+                "But the official 2026 JAC Class 12 result entry page is not live yet, "
+                "so I cannot fetch the result directly right now. You can still ask: result live or not"
+            )
+
+        supported_modes = detect_result_delivery_modes()
+        if format_choice not in supported_modes:
+            return (
+                f"The official 2026 result page is live, but {format_choice.upper()} delivery is not "
+                "available from the verified JAC flow yet."
+            )
+
+        return (
+            f"The official 2026 result entry page appears to be live and I have recorded your preference "
+            f"for {format_choice.upper()} delivery, but the final verified JAC fetch flow is not wired yet. "
+            "Once the exact official submission and response format are confirmed, I can use either HTML "
+            "summary delivery or direct PDF sending depending on what JAC returns."
+        )
+
+    CHAT_STATES.pop(chat_id, None)
+    return None
+
+
 def run_alert_check() -> dict:
     state = load_state()
     live = class_12_live()
@@ -159,7 +256,21 @@ def telegram_webhook():
     chat_id = chat.get("id")
 
     if text and chat_id:
-        reply = build_reply(text)
+        lookup_reply = handle_lookup_flow(chat_id, text)
+        if lookup_reply is not None:
+            reply = lookup_reply
+        elif any(
+            phrase in text.lower()
+            for phrase in (
+                "check result",
+                "my result",
+                "check my result",
+                "result check",
+            )
+        ):
+            reply = start_result_lookup(chat_id)
+        else:
+            reply = build_reply(text)
         send_telegram_message(chat_id, reply)
 
     return jsonify({"ok": True})
