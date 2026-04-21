@@ -8,6 +8,8 @@ from flask import Flask, jsonify, request
 
 
 JAC_URL = "https://jacresults.com/"
+OWNER_NAME = "Priyanshu Raj"
+INSTAGRAM_URL = "https://instagram.com/priyanshuxraj"
 STATE_FILE = Path("alert_state.json")
 
 app = Flask(__name__)
@@ -53,9 +55,29 @@ def save_state(state: dict) -> None:
 def send_telegram_message(chat_id: int, text: str) -> None:
     token = get_env("TELEGRAM_BOT_TOKEN")
     api_url = urljoin(f"https://api.telegram.org/bot{token}/", "sendMessage")
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Owner: Priyanshu Raj",
+                    "url": INSTAGRAM_URL,
+                }
+            ],
+            [
+                {
+                    "text": "Instagram: @priyanshuxraj",
+                    "url": INSTAGRAM_URL,
+                }
+            ],
+        ]
+    }
     response = requests.post(
         api_url,
-        data={"chat_id": str(chat_id), "text": text},
+        data={
+            "chat_id": str(chat_id),
+            "text": text,
+            "reply_markup": json.dumps(reply_markup),
+        },
         timeout=30,
     )
     response.raise_for_status()
@@ -63,13 +85,43 @@ def send_telegram_message(chat_id: int, text: str) -> None:
 
 def build_reply(message_text: str) -> str:
     text = message_text.lower()
+    if any(word in text for word in ("hi", "hello", "hey", "hii", "namaste")):
+        return (
+            f"Hello! I am the JAC result bot by {OWNER_NAME}. "
+            "I can check the official JAC Class 12 result for you. "
+            "Ask me things like: result live or not"
+        )
+
+    if "how are you" in text:
+        return (
+            f"I am good. I am the JAC result bot by {OWNER_NAME}. "
+            "I am watching the official JAC Class 12 result site for you. "
+            "Ask me: result live or not"
+        )
+
+    if any(phrase in text for phrase in ("thank you", "thanks", "thx")):
+        return (
+            f"You are welcome. I am {OWNER_NAME}'s JAC result bot. "
+            "Message me anytime to check the JAC Class 12 result."
+        )
+
+    if any(phrase in text for phrase in ("who are you", "what can you do", "help")):
+        return (
+            f"I am {OWNER_NAME}'s JAC result bot. I can tell you whether the official Class 12 result "
+            "is live. Try: result live or not"
+        )
+
     if "result" in text or "live" in text or "jac" in text:
         return (
             f"Yes, the official JAC Class 12 result appears to be live on {JAC_URL}"
             if class_12_live()
             else f"No, the official JAC Class 12 result is not live yet on {JAC_URL}"
         )
-    return "Send: result live or not"
+
+    return (
+        f"I am {OWNER_NAME}'s JAC result bot. I can chat a little and check the official JAC Class 12 result for you. "
+        "Try saying hello or ask: result live or not"
+    )
 
 
 def run_alert_check() -> dict:
